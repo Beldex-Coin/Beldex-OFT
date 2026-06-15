@@ -40,19 +40,38 @@ const deploy: DeployFunction = async (hre) => {
         return
     }
 
-    const { address } = await deploy(contractName, {
+    // BELDEX (V1) is a UUPS-upgradeable OFT. hardhat-deploy deploys the implementation
+    // (constructor takes only the immutable LZ endpoint) behind an ERC1967 proxy and
+    // calls `initialize` through it. The proxy is tracked under the deployment name
+    // `BELDEX`, so LayerZero wiring (peers, config) targets the proxy address.
+    //
+    // To upgrade this proxy to V2, run the separate deploy/MyOFTV2.ts script.
+    const result = await deploy(contractName, {
         from: deployer,
         args: [
-            'BELDEX', // name
-            'BDX', // symbol
-            endpointV2Deployment.address, // LayerZero's EndpointV2 address
-            deployer, // owner
+            endpointV2Deployment.address, // LayerZero's EndpointV2 address (immutable, implementation constructor)
         ],
         log: true,
         skipIfAlreadyDeployed: false,
+        proxy: {
+            proxyContract: 'UUPS',
+            execute: {
+                init: {
+                    methodName: 'initialize',
+                    args: [
+                        'BELDEX', // name
+                        'BDX', // symbol
+                        deployer, // delegate / owner
+                    ],
+                },
+            },
+        },
     })
 
-    console.log(`Deployed contract: ${contractName}, network: ${hre.network.name}, address: ${address}`)
+    // result.address       -> the proxy (the contract everyone interacts with)
+    // result.implementation -> the actual BELDEX logic contract (saved as `${contractName}_Implementation`)
+    console.log(`Proxy address:          ${result.address}`)
+    console.log(`Implementation address: ${result.implementation}`)
 }
 
 deploy.tags = [contractName]
