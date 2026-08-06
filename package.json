@@ -14,7 +14,8 @@
     "lint:sol": "solhint 'contracts/**/*.sol'",
     "test": "$npm_execpath run test:forge && $npm_execpath run test:hardhat",
     "test:forge": "forge test",
-    "test:hardhat": "hardhat test"
+    "test:hardhat": "hardhat test",
+    "validate:v2": "hardhat compile && openzeppelin-upgrades-core validate --contract contracts/MyOFTV2.sol:BELDEXV2 --reference contracts/MyOFT.sol:BELDEX --unsafeAllow \"constructor,state-variable-immutable,missing-initializer,missing-initializer-call\""
   },
   "resolutions": {
     "ethers": "^5.7.2",
