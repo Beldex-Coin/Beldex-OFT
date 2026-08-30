@@ -69,7 +69,23 @@ contract BELDEXV2 is PausableUpgradeable, UUPSUpgradeable, OFTUpgradeable {
     /// @notice Upgrade hook called once via `upgradeToAndCall` when migrating V1 -> V2.
     /// @dev Seeds the mint authority so minting doesn't get locked out immediately
     ///      after the upgrade. The reinitializer(2) guard ensures this runs only once.
-    function initializeV2(address _initialMintAuthority) external reinitializer(2) {
+    ///
+    ///      SECURITY: `onlyOwner` is load-bearing, not decoration. `reinitializer(2)`
+    ///      constrains *how many times* this runs, never *who* runs it, so without an
+    ///      access-control modifier this function was callable by any address the moment
+    ///      the V2 implementation was set behind the proxy. Whoever won that race became
+    ///      `mintAuthority` and could then call {mint} for an unbounded amount — full
+    ///      control of token supply, obtained by watching the mempool. The exposure was
+    ///      not limited to a plain `upgradeTo` followed by a separate initialization
+    ///      call: even the intended `upgradeToAndCall` path is a two-transaction sequence
+    ///      from the operator's point of view (deploy the implementation, then upgrade),
+    ///      and an attacker only needed to land between them.
+    ///
+    ///      With `onlyOwner`, a lost race is no longer a compromise: an attacker's call
+    ///      reverts, and the single permitted invocation stays reserved for the owner
+    ///      inside `upgradeToAndCall`, where `msg.sender` is preserved through the
+    ///      delegatecall and is therefore still the owner.
+    function initializeV2(address _initialMintAuthority) external reinitializer(2) onlyOwner {
         if (_initialMintAuthority == address(0)) revert ZeroAddress();
         mintAuthority = _initialMintAuthority;
         emit MintAuthorityUpdated(address(0), _initialMintAuthority);

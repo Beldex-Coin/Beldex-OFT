@@ -41,7 +41,18 @@ const baseaccounts: HttpNetworkAccountsUserConfig | undefined = MNEMONIC
       ? [PRIVATE_KEY_BASE]
       : undefined
 
-console.log(`Using accounts config: ${accounts != null ? JSON.stringify(accounts) : 'none'}`)
+// SECURITY: never serialize `accounts` into the log. This object holds the raw
+// deployer mnemonic (or private key) read from .env, so the previous
+// `JSON.stringify(accounts)` printed live signing material to stdout on *every*
+// hardhat invocation — including `compile` and `test`. That put the key into CI job
+// logs (typically retained and readable by anyone with repository read access),
+// terminal scrollback, and any `script`/tee capture, none of which are secret stores
+// and none of which can be retroactively scrubbed with confidence.
+//
+// Log only which authentication method resolved, which is the sole piece of
+// information this line was ever useful for when diagnosing a misconfigured .env.
+const accountsSource = MNEMONIC ? 'MNEMONIC' : PRIVATE_KEY ? 'PRIVATE_KEY' : 'none'
+console.log(`Using accounts config: ${accountsSource}`)
 
 if (accounts == null) {
     console.warn(
@@ -70,7 +81,13 @@ const config: HardhatUserConfig = {
         'base-sepolia-testnet': {
             eid: EndpointId.BASESEP_V2_TESTNET,
             url: process.env.RPC_URL_BASE_SEPOLIA || 'https://sepolia.base.org',
-            baseaccounts,
+            // CORRECTNESS: the shorthand `baseaccounts` produced a network entry with a
+            // key hardhat does not recognise, so this network silently had *no* signer
+            // configured while `PRIVATE_KEY_BASE` appeared to be wired up. Every
+            // deployment or transaction against base-sepolia-testnet failed for a reason
+            // that pointed at the environment rather than at this file. The intent is
+            // clearly to use the Base-specific account list.
+            accounts: baseaccounts,
         },
         'sepolia-testnet': {
             eid: EndpointId.SEPOLIA_V2_TESTNET,
